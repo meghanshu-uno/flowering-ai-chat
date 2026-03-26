@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { ChatMessage } from "@/lib/openrouter";
 
 export interface Chat {
@@ -9,28 +9,9 @@ export interface Chat {
   modelId: string;
 }
 
-const STORAGE_KEY = "bhosdu-cord-chats";
-
-function loadChats(): Chat[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveChats(chats: Chat[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(chats));
-}
-
 export function useChatStore() {
-  const [chats, setChats] = useState<Chat[]>(loadChats);
+  const [chats, setChats] = useState<Chat[]>([]);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
-
-  useEffect(() => {
-    saveChats(chats);
-  }, [chats]);
 
   const activeChat = chats.find((c) => c.id === activeChatId) || null;
 
@@ -43,7 +24,8 @@ export function useChatStore() {
       createdAt: Date.now(),
       modelId,
     };
-    setChats((prev) => [chat, ...prev]);
+    // Only keep the new chat, discard all previous ones
+    setChats([chat]);
     setActiveChatId(id);
     return id;
   }, []);

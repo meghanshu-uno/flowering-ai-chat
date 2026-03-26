@@ -317,7 +317,7 @@ export default function Index() {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="Reply to Axo Ai..."
+                  placeholder="Reply to Bhosdu AI..."
                   rows={1}
                   className="w-full bg-transparent px-5 pt-4 pb-2 text-foreground text-sm resize-none outline-none placeholder:text-muted-foreground"
                   style={{ minHeight: "44px", maxHeight: "160px" }}

@@ -25,7 +25,7 @@ export interface ChatMessage {
   content: string;
 }
 
-const SYSTEM_PROMPT = `You are Axo Ai, a powerful and accurate AI assistant. Your knowledge was last updated in 2026. The current year is 2026. When asked about time, dates, or current events, respond accordingly based on 2026.
+const SYSTEM_PROMPT = `You are Bhosdu AI, a powerful and accurate AI assistant. Your knowledge was last updated in 2026. The current year is 2026. When asked about time, dates, or current events, respond accordingly based on 2026.
 
 Important instructions:
 - Always provide thorough, well-researched, and accurate answers
