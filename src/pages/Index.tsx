@@ -226,7 +226,7 @@ export default function Index() {
           {!hasMessages ? (
             <div className="flex flex-col items-center justify-center h-full px-4">
               <div className="flex items-center gap-3 mb-8">
-                <img src={logo} alt="Axo Ai" width={40} height={40} />
+                <img src={logo} alt="Bhosdu AI" width={40} height={40} />
                 <h1 className="text-3xl font-semibold tracking-tight" style={{ color: "hsl(var(--greeting))" }}>
                   {getGreeting()}
                 </h1>
