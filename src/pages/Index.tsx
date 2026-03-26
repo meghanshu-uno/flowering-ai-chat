@@ -112,7 +112,7 @@ export default function Index() {
   const [copiedChat, setCopiedChat] = useState(false);
 
   const handleCopyChat = () => {
-    const text = messages.map((m) => `${m.role === "user" ? "You" : "Axo Ai"}: ${m.content}`).join("\n\n");
+    const text = messages.map((m) => `${m.role === "user" ? "You" : "Bhosdu AI"}: ${m.content}`).join("\n\n");
     navigator.clipboard.writeText(text);
     setCopiedChat(true);
     setTimeout(() => setCopiedChat(false), 2000);
