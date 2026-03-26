@@ -112,7 +112,7 @@ export default function Index() {
   const [copiedChat, setCopiedChat] = useState(false);
 
   const handleCopyChat = () => {
-    const text = messages.map((m) => `${m.role === "user" ? "You" : "Axo Ai"}: ${m.content}`).join("\n\n");
+    const text = messages.map((m) => `${m.role === "user" ? "You" : "Bhosdu AI"}: ${m.content}`).join("\n\n");
     navigator.clipboard.writeText(text);
     setCopiedChat(true);
     setTimeout(() => setCopiedChat(false), 2000);
@@ -216,8 +216,8 @@ export default function Index() {
             </DropdownMenu>
           </div>
           <div className="flex items-center gap-2">
-            <img src={logo} alt="Axo Ai" width={24} height={24} className="opacity-70" />
-            <span className="text-sm font-semibold text-foreground tracking-tight">Axo Ai</span>
+            <img src={logo} alt="Bhosdu AI" width={24} height={24} className="opacity-70" />
+            <span className="text-sm font-semibold text-foreground tracking-tight">Bhosdu AI</span>
           </div>
         </div>
 
@@ -226,7 +226,7 @@ export default function Index() {
           {!hasMessages ? (
             <div className="flex flex-col items-center justify-center h-full px-4">
               <div className="flex items-center gap-3 mb-8">
-                <img src={logo} alt="Axo Ai" width={40} height={40} />
+                <img src={logo} alt="Bhosdu AI" width={40} height={40} />
                 <h1 className="text-3xl font-semibold tracking-tight" style={{ color: "hsl(var(--greeting))" }}>
                   {getGreeting()}
                 </h1>
@@ -317,7 +317,7 @@ export default function Index() {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="Reply to Axo Ai..."
+                  placeholder="Reply to Bhosdu AI..."
                   rows={1}
                   className="w-full bg-transparent px-5 pt-4 pb-2 text-foreground text-sm resize-none outline-none placeholder:text-muted-foreground"
                   style={{ minHeight: "44px", maxHeight: "160px" }}
