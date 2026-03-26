@@ -6,21 +6,21 @@ export interface Model {
   apiKey: string;
 }
 
+const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
+const GROQ_KEY = "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";
+
 export const MODELS: Model[] = [
-  {
-    id: "llama-70b-groq",
-    name: "Llama 3.3 70B Fast",
-    modelId: "llama-3.3-70b-versatile",
-    apiUrl: "https://api.groq.com/openai/v1/chat/completions",
-    apiKey: "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",
-  },
-  {
-    id: "llama-8b",
-    name: "Llama 3.1 8B",
-    modelId: "llama-3.1-8b-instant",
-    apiUrl: "https://api.groq.com/openai/v1/chat/completions",
-    apiKey: "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",
-  },
+  { id: "llama-70b", name: "Llama 3.3 70B", modelId: "llama-3.3-70b-versatile", apiUrl: GROQ_URL, apiKey: GROQ_KEY },
+  { id: "llama-8b", name: "Llama 3.1 8B", modelId: "llama-3.1-8b-instant", apiUrl: GROQ_URL, apiKey: GROQ_KEY },
+  { id: "llama-scout", name: "Llama 4 Scout 17B", modelId: "meta-llama/llama-4-scout-17b-16e-instruct", apiUrl: GROQ_URL, apiKey: GROQ_KEY },
+  { id: "qwen3-32b", name: "Qwen 3 32B", modelId: "qwen/qwen3-32b", apiUrl: GROQ_URL, apiKey: GROQ_KEY },
+  { id: "kimi-k2", name: "Kimi K2", modelId: "moonshotai/kimi-k2-instruct", apiUrl: GROQ_URL, apiKey: GROQ_KEY },
+  { id: "gpt-oss-120b", name: "GPT-OSS 120B", modelId: "openai/gpt-oss-120b", apiUrl: GROQ_URL, apiKey: GROQ_KEY },
+  { id: "gpt-oss-20b", name: "GPT-OSS 20B", modelId: "openai/gpt-oss-20b", apiUrl: GROQ_URL, apiKey: GROQ_KEY },
+  { id: "compound", name: "Groq Compound", modelId: "groq/compound", apiUrl: GROQ_URL, apiKey: GROQ_KEY },
+  { id: "compound-mini", name: "Groq Compound Mini", modelId: "groq/compound-mini", apiUrl: GROQ_URL, apiKey: GROQ_KEY },
+  { id: "orpheus-arabic", name: "Orpheus Arabic", modelId: "canopylabs/orpheus-arabic-saudi", apiUrl: GROQ_URL, apiKey: GROQ_KEY },
+  { id: "orpheus-english", name: "Orpheus English", modelId: "canopylabs/orpheus-v1-english", apiUrl: GROQ_URL, apiKey: GROQ_KEY },
 ];
 
 export const FLUX_API_KEY = "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";
