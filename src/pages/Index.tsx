@@ -216,8 +216,8 @@ export default function Index() {
             </DropdownMenu>
           </div>
           <div className="flex items-center gap-2">
-            <img src={logo} alt="Axo Ai" width={24} height={24} className="opacity-70" />
-            <span className="text-sm font-semibold text-foreground tracking-tight">Axo Ai</span>
+            <img src={logo} alt="Bhosdu AI" width={24} height={24} className="opacity-70" />
+            <span className="text-sm font-semibold text-foreground tracking-tight">Bhosdu AI</span>
           </div>
         </div>
 
