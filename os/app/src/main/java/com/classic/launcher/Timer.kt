@@ -43,6 +43,42 @@ class Prefs(c: Context) {
     var note: String
         get() = sp.getString("note", "") ?: ""
         set(v) { sp.edit().putString("note", v).apply() }
+
+    var home: String?
+        get() = sp.getString("home", null)
+        set(v) { sp.edit().putString("home", v).apply() }
+
+    var hidden: Set<String>
+        get() = (sp.getString("hidden", "") ?: "").split("|").filter { it.isNotEmpty() }.toSet()
+        set(v) { sp.edit().putString("hidden", v.joinToString("|")).apply() }
+
+    var iconDp: Int
+        get() = sp.getInt("iconDp", 52)
+        set(v) { sp.edit().putInt("iconDp", v).apply() }
+
+    var cols: Int
+        get() = sp.getInt("cols", 4)
+        set(v) { sp.edit().putInt("cols", v).apply() }
+
+    var accent: Int
+        get() = sp.getInt("accent", 0xFFFF3B30.toInt())
+        set(v) { sp.edit().putInt("accent", v).apply() }
+
+    var showYear: Boolean
+        get() = sp.getBoolean("showYear", true)
+        set(v) { sp.edit().putBoolean("showYear", v).apply() }
+
+    var showNotes: Boolean
+        get() = sp.getBoolean("showNotes", true)
+        set(v) { sp.edit().putBoolean("showNotes", v).apply() }
+
+    var labels: Boolean
+        get() = sp.getBoolean("labels", true)
+        set(v) { sp.edit().putBoolean("labels", v).apply() }
+
+    var blackBg: Boolean
+        get() = sp.getBoolean("blackBg", false)
+        set(v) { sp.edit().putBoolean("blackBg", v).apply() }
 }
 
 class TimerReceiver : BroadcastReceiver() {
