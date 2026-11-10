@@ -7,7 +7,7 @@
 
     <application
         android:allowBackup="false"
-        android:label="Classic Launcher"
+        android:label="Axolot Launcher"
         android:theme="@style/AppTheme">
 
         <activity

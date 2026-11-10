@@ -135,7 +135,9 @@ class MainActivity : Activity() {
     private var hiddenMode = false
     private val placements = ArrayList<Placement>()
     private val folders = HashMap<String, Folder>()
-    private var activePages = listOf(0, 1, 2)
+    private val pageIds = ArrayList<Int>()
+    private val pageViews = HashMap<Int, FrameLayout>()
+    private val layers = HashMap<Int, FrameLayout>()
 
     // views
     private lateinit var root: FrameLayout
@@ -154,9 +156,7 @@ class MainActivity : Activity() {
     private lateinit var dateTv: TextView
     private lateinit var timeTv: TextView
     private lateinit var timerTv: TextView
-    private lateinit var year: YearView
-    private lateinit var pages: List<View>
-    private val iconLayers = arrayOfNulls<FrameLayout>(3)
+    private lateinit var clockCol: LinearLayout
 
     // state
     private var open = false
@@ -183,10 +183,19 @@ class MainActivity : Activity() {
     private var edgeDir = 0
     private val edgeRun = object : Runnable {
         override fun run() {
-            val n = pager.currentItem + edgeDir
-            if (edgeDir != 0 && drag != null && n >= 0 && n < activePages.size) {
+            if (edgeDir == 0 || drag == null || open) return
+            val cur = pager.currentItem
+            val n = cur + edgeDir
+            if (n >= 0 && n < pageIds.size) {
                 pager.setCurrentItem(n, true)
-                handler.postDelayed(this, 900)
+                handler.postDelayed(this, 800)
+            } else {
+                // at the last page: start a new one (unless this one is an empty spare)
+                val id = pageIds.getOrNull(cur) ?: return
+                if (id == 0 || placements.any { it.page == id }) {
+                    createPage(edgeDir < 0)
+                    handler.postDelayed(this, 800)
+                }
             }
         }
     }
@@ -204,7 +213,7 @@ class MainActivity : Activity() {
     private val commands = linkedMapOf(
         "admin" to "Admin panel (choose which apps show)",
         "hide" to "Show hidden apps",
-        "customize" to "Customize (size, colors, pages)",
+        "customize" to "Customize (size, columns, colors)",
         "help" to "List of all commands"
     )
 
@@ -218,7 +227,6 @@ class MainActivity : Activity() {
         super.onCreate(b)
         prefs = Prefs(this)
         hiddenSet = prefs.hidden
-        computeActivePages()
 
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor = Color.TRANSPARENT
@@ -256,6 +264,7 @@ class MainActivity : Activity() {
         ViewCompat.requestApplyInsets(root)
 
         loadHome()
+        refreshPager(0)
         applySettings()
         updateClock()
         updateTimer()
@@ -280,7 +289,6 @@ class MainActivity : Activity() {
         super.onResume()
         TimerReceiver.stop()
         hideKeyboard()
-        year.invalidate()
         restartTick()
     }
 
@@ -322,23 +330,9 @@ class MainActivity : Activity() {
 
     private fun accentTint(): Int = (prefs.accent and 0x00FFFFFF) or 0x66000000
 
-    private fun computeActivePages() {
-        val l = ArrayList<Int>()
-        l.add(0)
-        if (prefs.showYear) l.add(1)
-        if (prefs.showNotes) l.add(2)
-        activePages = l
-    }
-
     private fun applySettings() {
-        computeActivePages()
-        pager.adapter = PageAdapter()
-        pager.offscreenPageLimit = 2
-        rebuildDots()
         (rv.layoutManager as GridLayoutManager).spanCount = prefs.cols
         appAdapter.notifyDataSetChanged()
-        year.accent = prefs.accent
-        year.invalidate()
         timerTv.background = glass(22, accentTint())
         cellHi.background = glass(16, accentTint())
         window.setBackgroundDrawable(ColorDrawable(if (prefs.blackBg) Color.BLACK else Color.TRANSPARENT))
@@ -352,7 +346,7 @@ class MainActivity : Activity() {
         GradientDrawable().apply { setColor(color); cornerRadius = dp(r).toFloat() }
 
     private fun buildPages() {
-        dayTv = TextView(this)
+        dayTv = DayText(this)
         dayTv.gravity = Gravity.CENTER
         dayTv.setTextColor(Color.WHITE)
         dayTv.maxLines = 1
@@ -361,10 +355,8 @@ class MainActivity : Activity() {
         } catch (e: Exception) {
             Typeface.create("sans-serif-medium", Typeface.NORMAL)
         }
-        dayTv.letterSpacing = 0.08f
-        dayTv.paint.style = Paint.Style.FILL_AND_STROKE   // slightly bolder
-        dayTv.paint.strokeWidth = 1.6f
-        dayTv.setPadding(dp(16), 0, dp(16), 0)
+        dayTv.letterSpacing = 0.16f
+        dayTv.setPadding(dp(18), 0, dp(18), 0)
         TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(dayTv, 16, 44, 1, TypedValue.COMPLEX_UNIT_SP)
 
         dateTv = TextView(this)
@@ -372,14 +364,14 @@ class MainActivity : Activity() {
         dateTv.setTextColor(Color.WHITE)
         dateTv.textSize = 19f
         dateTv.letterSpacing = 0.14f
-        dateTv.typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+        dateTv.typeface = Typeface.create("sans-serif", Typeface.NORMAL)
 
         timeTv = TextView(this)
         timeTv.gravity = Gravity.CENTER
         timeTv.setTextColor(0xF2FFFFFF.toInt())
         timeTv.textSize = 17f
         timeTv.letterSpacing = 0.12f
-        timeTv.typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+        timeTv.typeface = Typeface.create("sans-serif", Typeface.NORMAL)
 
         timerTv = TextView(this)
         timerTv.gravity = Gravity.CENTER
@@ -390,7 +382,7 @@ class MainActivity : Activity() {
         timerTv.setOnClickListener { showTimerDialog() }
         press(timerTv)
 
-        val clockCol = LinearLayout(this)
+        clockCol = LinearLayout(this)
         clockCol.orientation = LinearLayout.VERTICAL
         clockCol.gravity = Gravity.CENTER
         clockCol.setPadding(0, 0, 0, dp(30))
@@ -398,63 +390,69 @@ class MainActivity : Activity() {
         clockCol.addView(dateTv, LinearLayout.LayoutParams(MP, WC).apply { topMargin = dp(4) })
         clockCol.addView(timeTv, LinearLayout.LayoutParams(MP, WC).apply { topMargin = dp(4) })
         clockCol.addView(timerTv, LinearLayout.LayoutParams(WC, WC).apply { topMargin = dp(26) })
+    }
 
-        year = YearView(this)
-        year.background = glass(24, 0x33FFFFFF)
-        val yearBox = FrameLayout(this)
-        yearBox.setPadding(dp(20), 0, dp(20), 0)
-        yearBox.addView(year, FrameLayout.LayoutParams(MP, dp(320), Gravity.CENTER))
-
-        val title = TextView(this)
-        title.text = "NOTES"
-        title.setTextColor(Color.WHITE)
-        title.textSize = 20f
-        title.letterSpacing = 0.2f
-        title.typeface = Typeface.create("sans-serif-light", Typeface.NORMAL)
-        val note = EditText(this)
-        note.hint = "Write something..."
-        note.setHintTextColor(0x88FFFFFF.toInt())
-        note.setTextColor(Color.WHITE)
-        note.textSize = 15f
-        note.gravity = Gravity.TOP or Gravity.START
-        note.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or
-            InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
-        note.background = glass(24, 0x33FFFFFF)
-        note.setPadding(dp(16), dp(14), dp(16), dp(14))
-        note.setText(prefs.note)
-        note.doAfterTextChanged { prefs.note = it?.toString() ?: "" }
-        val notesBox = LinearLayout(this)
-        notesBox.orientation = LinearLayout.VERTICAL
-        notesBox.gravity = Gravity.CENTER_VERTICAL
-        notesBox.setPadding(dp(20), 0, dp(20), 0)
-        notesBox.addView(title, LinearLayout.LayoutParams(WC, WC).apply { bottomMargin = dp(12) })
-        notesBox.addView(note, LinearLayout.LayoutParams(MP, dp(320)))
-
-        // Every page = its content + a transparent layer on top that holds draggable icons
-        val contents = listOf<View>(clockCol, yearBox, notesBox)
-        val list = ArrayList<View>()
-        for (i in 0 until 3) {
-            val page = FrameLayout(this)
-            page.layoutParams = RecyclerView.LayoutParams(MP, MP)
-            page.addView(contents[i], FrameLayout.LayoutParams(MP, MP))
-            val layer = FrameLayout(this)
-            layer.addOnLayoutChangeListener { _, l, t, r, bt, ol, ot, orr, ob ->
-                if (r - l != orr - ol || bt - t != ob - ot) {
-                    handler.removeCallbacks(renderRun)
-                    handler.post(renderRun)
-                }
+    // Page 0 = the clock page (never deleted). Other pages only hold icons.
+    private fun pageView(id: Int): FrameLayout {
+        pageViews[id]?.let { return it }
+        val page = FrameLayout(this)
+        page.layoutParams = RecyclerView.LayoutParams(MP, MP)
+        if (id == 0) page.addView(clockCol, FrameLayout.LayoutParams(MP, MP))
+        val layer = FrameLayout(this)
+        layer.addOnLayoutChangeListener { _, l, t, r, bt, ol, ot, orr, ob ->
+            if (r - l != orr - ol || bt - t != ob - ot) {
+                handler.removeCallbacks(renderRun)
+                handler.post(renderRun)
             }
-            iconLayers[i] = layer
-            page.addView(layer, FrameLayout.LayoutParams(MP, MP))
-            list.add(page)
         }
-        pages = list
+        layers[id] = layer
+        page.addView(layer, FrameLayout.LayoutParams(MP, MP))
+        pageViews[id] = page
+        return page
+    }
+
+    private fun refreshPager(selectId: Int?) {
+        pager.adapter = PageAdapter()
+        val idx = if (selectId != null) max(0, pageIds.indexOf(selectId)) else 0
+        pager.setCurrentItem(idx, false)
+        rebuildDots()
+        updateDots(idx)
+        renderHome()
+    }
+
+    private fun savePages() {
+        prefs.pages = pageIds.joinToString("|")
+    }
+
+    private fun createPage(atLeft: Boolean) {
+        val id = (pageIds.maxOrNull() ?: 0) + 1
+        if (atLeft) pageIds.add(0, id) else pageIds.add(id)
+        savePages()
+        refreshPager(id)
+        root.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+    }
+
+    // delete pages (except the clock page) that have no icons left
+    private fun cleanupPages() {
+        if (drag != null) return
+        val keep = pageIds.filter { it == 0 || placements.any { p -> p.page == it } }
+        if (keep.size == pageIds.size) return
+        val oldIdx = pager.currentItem
+        val curId = pageIds.getOrNull(oldIdx) ?: 0
+        val removed = pageIds.filter { !keep.contains(it) }
+        pageIds.clear()
+        pageIds.addAll(keep)
+        for (r in removed) { pageViews.remove(r); layers.remove(r) }
+        savePages()
+        val target = if (pageIds.contains(curId)) curId else pageIds[min(oldIdx, pageIds.size - 1)]
+        refreshPager(target)
     }
 
     private val renderRun = Runnable { renderHome() }
 
     private fun buildPager() {
         pager = ViewPager2(this)
+        pager.offscreenPageLimit = 2
         pager.setPageTransformer { page, pos ->
             val a = min(1f, abs(pos))
             page.alpha = 1f - a * 0.65f
@@ -479,7 +477,7 @@ class MainActivity : Activity() {
 
     private fun rebuildDots() {
         dots.removeAllViews()
-        for (i in activePages.indices) {
+        for (i in pageIds.indices) {
             val d = View(this)
             d.background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.WHITE) }
             d.alpha = if (i == 0) 1f else 0.35f
@@ -488,7 +486,7 @@ class MainActivity : Activity() {
             lp.marginEnd = dp(4)
             dots.addView(d, lp)
         }
-        dots.visibility = if (activePages.size <= 1 || imeUp) View.INVISIBLE else View.VISIBLE
+        dots.visibility = if (pageIds.size <= 1 || imeUp) View.INVISIBLE else View.VISIBLE
     }
 
     private fun updateDots(p: Int) {
@@ -503,8 +501,8 @@ class MainActivity : Activity() {
         dock = LinearLayout(this)
         dock.orientation = LinearLayout.HORIZONTAL
         dock.gravity = Gravity.CENTER
-        dock.setPadding(dp(12), dp(12), dp(12), dp(12))
-        dock.background = glass(34)
+        dock.setPadding(dp(10), dp(10), dp(10), dp(10))
+        dock.background = glass(30)
     }
 
     private fun buildDrawer() {
@@ -589,7 +587,7 @@ class MainActivity : Activity() {
         val ol = dots.layoutParams as FrameLayout.LayoutParams
         ol.bottomMargin = bottom + dp(112)
         dots.layoutParams = ol
-        dots.visibility = if (activePages.size <= 1 || imeUp) View.INVISIBLE else View.VISIBLE
+        dots.visibility = if (pageIds.size <= 1 || imeUp) View.INVISIBLE else View.VISIBLE
         updateDockVisibility()
 
         val rl = drawer.layoutParams as FrameLayout.LayoutParams
@@ -880,11 +878,11 @@ class MainActivity : Activity() {
             val iv = ImageView(this)
             iv.setImageDrawable(a.icon)
             iv.scaleType = ImageView.ScaleType.FIT_CENTER
-            iv.setPadding(dp(4), dp(4), dp(4), dp(4))
+            iv.setPadding(dp(5), dp(5), dp(5), dp(5))
             press(iv)
             iv.setOnClickListener { launch(a, iv) }
             iv.setOnLongClickListener { startDrag(0, a.key, SRC_DOCK, iv, null); true }
-            dock.addView(iv, LinearLayout.LayoutParams(dp(74), dp(68)))
+            dock.addView(iv, LinearLayout.LayoutParams(dp(64), dp(58)))
         }
         updateDockVisibility()
         if (animate && oldW > 0 && items.isNotEmpty()) {
@@ -947,7 +945,7 @@ class MainActivity : Activity() {
                             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     )
                     4 -> startActivity(Intent(Intent.ACTION_DELETE, Uri.parse("package:" + a.pkg)))
-                    5 -> { removeFromHome(a.key); saveHome(); renderHome() }
+                    5 -> { removeFromHome(a.key); saveHome(); renderHome(); cleanupPages() }
                 }
             } catch (e: Exception) { }
             true
@@ -1019,14 +1017,15 @@ class MainActivity : Activity() {
         val msg = "SEARCH COMMANDS (type, then press Enter)\n\n" +
             "admin  -  choose which apps show or hide\n" +
             "hide  -  open the list of hidden apps\n" +
-            "customize  -  icon size, columns, colors, pages\n" +
+            "customize  -  icon size, columns, colors\n" +
             "help  -  this list\n\n" +
             "GESTURES\n\n" +
             "Swipe up  -  app drawer\n" +
-            "Swipe left / right  -  pages\n" +
+            "Swipe left / right  -  home pages\n" +
             "Hold an app, then drag  -  place it on home or in the dock\n" +
             "Drop an app on another app  -  make a folder\n" +
             "Hold an app and let go  -  menu (hide, info, uninstall)\n" +
+            "Drag to the screen edge  -  new home page (empty pages delete themselves)\n" +
             "Drag to the top bar  -  remove from home or dock\n" +
             "Tap the timer  -  set a timer"
         darkDialog().setTitle("Help").setMessage(msg).setPositiveButton("OK", null).show()
@@ -1156,9 +1155,7 @@ class MainActivity : Activity() {
             sw.setOnCheckedChangeListener { _, c -> change(c); applySettings() }
             return sw
         }
-        col.addView(label("Pages & look"))
-        col.addView(toggle("Year page", prefs.showYear) { prefs.showYear = it })
-        col.addView(toggle("Notes page", prefs.showNotes) { prefs.showNotes = it })
+        col.addView(label("Look"))
         col.addView(toggle("App names on home", prefs.labels) { prefs.labels = it })
         col.addView(toggle("Pure black background (saves battery)", prefs.blackBg) { prefs.blackBg = it })
 
@@ -1174,23 +1171,32 @@ class MainActivity : Activity() {
     private fun loadHome() {
         placements.clear()
         folders.clear()
-        val s = prefs.home ?: return
-        try {
-            val o = JSONObject(s)
-            val pa = o.getJSONArray("p")
-            for (i in 0 until pa.length()) {
-                val p = pa.getJSONObject(i)
-                placements.add(Placement(p.getInt("pg"), p.getInt("c"), p.getInt("r"), p.getInt("k"), p.getString("ref")))
-            }
-            val fa = o.getJSONArray("f")
-            for (i in 0 until fa.length()) {
-                val f = fa.getJSONObject(i)
-                val ks = f.getJSONArray("keys")
-                val list = ArrayList<String>()
-                for (j in 0 until ks.length()) list.add(ks.getString(j))
-                folders[f.getString("id")] = Folder(f.getString("id"), f.getString("n"), list)
-            }
-        } catch (e: Exception) { }
+        pageIds.clear()
+        for (x in prefs.pages.split("|")) {
+            val n = x.toIntOrNull()
+            if (n != null && !pageIds.contains(n)) pageIds.add(n)
+        }
+        if (!pageIds.contains(0)) pageIds.add(0)
+        val s = prefs.home
+        if (s != null) {
+            try {
+                val o = JSONObject(s)
+                val pa = o.getJSONArray("p")
+                for (i in 0 until pa.length()) {
+                    val p = pa.getJSONObject(i)
+                    placements.add(Placement(p.getInt("pg"), p.getInt("c"), p.getInt("r"), p.getInt("k"), p.getString("ref")))
+                }
+                val fa = o.getJSONArray("f")
+                for (i in 0 until fa.length()) {
+                    val f = fa.getJSONObject(i)
+                    val ks = f.getJSONArray("keys")
+                    val list = ArrayList<String>()
+                    for (j in 0 until ks.length()) list.add(ks.getString(j))
+                    folders[f.getString("id")] = Folder(f.getString("id"), f.getString("n"), list)
+                }
+            } catch (e: Exception) { }
+        }
+        for (p in placements) if (!pageIds.contains(p.page)) pageIds.add(p.page)
     }
 
     private fun saveHome() {
@@ -1223,7 +1229,7 @@ class MainActivity : Activity() {
             if (f.keys.removeAll { !byKey.containsKey(it) }) { changed = true; cleanFolder(f) }
         }
         if (placements.removeAll { it.kind == 0 && !byKey.containsKey(it.ref) }) changed = true
-        if (changed) saveHome()
+        if (changed) { saveHome(); cleanupPages() }
     }
 
     private fun cleanFolder(f: Folder) {
@@ -1247,7 +1253,7 @@ class MainActivity : Activity() {
         placements.firstOrNull { it !== except && it.page == page && it.col == col && it.row == row }
 
     private fun findFree(page: Int, col: Int, row: Int, except: Placement?): IntArray {
-        val layer = iconLayers[page]
+        val layer = layers[page]
         val rows = if (layer != null && layer.height > 0) rowsOf(layer) else 6
         val cols = prefs.cols
         var best: IntArray? = null
@@ -1265,7 +1271,7 @@ class MainActivity : Activity() {
         val cols = prefs.cols
         val done = ArrayList<Placement>()
         for (p in placements) {
-            val layer = iconLayers[p.page]
+            val layer = layers[p.page]
             val rows = if (layer != null && layer.height > 0) rowsOf(layer) else 6
             p.col = min(p.col, cols - 1)
             p.row = min(p.row, rows - 1)
@@ -1282,8 +1288,8 @@ class MainActivity : Activity() {
 
     private fun renderHome() {
         val cols = prefs.cols
-        for (pid in 0 until 3) {
-            val layer = iconLayers[pid] ?: continue
+        for (pid in pageIds.toList()) {
+            val layer = layers[pid] ?: continue
             layer.removeAllViews()
             val w = layer.width
             if (w == 0 || layer.height == 0) continue
@@ -1476,8 +1482,8 @@ class MainActivity : Activity() {
     // returns [pageId, col, row] under the finger, or null
     private fun cellAt(x: Float, y: Float): IntArray? {
         if (open) return null
-        val pid = activePages.getOrNull(pager.currentItem) ?: return null
-        val layer = iconLayers[pid] ?: return null
+        val pid = pageIds.getOrNull(pager.currentItem) ?: return null
+        val layer = layers[pid] ?: return null
         if (layer.width == 0) return null
         val loc = IntArray(2)
         layer.getLocationOnScreen(loc)
@@ -1500,7 +1506,8 @@ class MainActivity : Activity() {
         if (cell == null) {
             cellHi.visibility = View.GONE
         } else {
-            val layer = iconLayers[cell[0]]!!
+            val layer = layers[cell[0]]
+            if (layer == null) { cellHi.visibility = View.GONE; return }
             val loc = IntArray(2)
             layer.getLocationOnScreen(loc)
             val cw = layer.width / prefs.cols
@@ -1547,6 +1554,11 @@ class MainActivity : Activity() {
     }
 
     private fun endDrag(x: Float, y: Float, cancelled: Boolean) {
+        endDragInner(x, y, cancelled)
+        cleanupPages()
+    }
+
+    private fun endDragInner(x: Float, y: Float, cancelled: Boolean) {
         val d = drag ?: return
         drag = null
         handler.removeCallbacks(edgeRun)
@@ -1764,8 +1776,7 @@ class MainActivity : Activity() {
                     val dy = e.rawY - startY
                     val dx = e.rawX - startX
                     if (abs(dy) > slop && abs(dy) > abs(dx) * 1.3f) {
-                        val canOpen = !open && dy < 0 &&
-                            (activePages.getOrNull(pager.currentItem) != 2 || startY > root.height * 0.8f)
+                        val canOpen = !open && dy < 0
                         val canClose = open && dy > 0 && !rv.canScrollVertically(-1)
                         if (canOpen || canClose) {
                             drawerDragging = true
@@ -1809,10 +1820,10 @@ class MainActivity : Activity() {
     // ------------------------------------------------------------------ adapters
 
     inner class PageAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
-        override fun getItemCount() = activePages.size
-        override fun getItemViewType(position: Int) = activePages[position]
+        override fun getItemCount() = pageIds.size
+        override fun getItemViewType(position: Int) = pageIds[position]
         override fun onCreateViewHolder(p: ViewGroup, t: Int): RecyclerView.ViewHolder {
-            val v = pages[t]
+            val v = pageView(t)
             (v.parent as? ViewGroup)?.removeView(v)
             return object : RecyclerView.ViewHolder(v) {}
         }
@@ -1887,43 +1898,14 @@ class FolderIconView(c: Context, private val bitmaps: List<Bitmap>) : View(c) {
     }
 }
 
-// Year-progress dot widget: one row per month, one dot per day
-class YearView(c: Context) : View(c) {
-    var accent: Int = 0xFFFF3B30.toInt()
-    private val p = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val t = Paint(Paint.ANTI_ALIAS_FLAG)
-    override fun onDraw(cv: Canvas) {
-        val now = Calendar.getInstance()
-        val yr = now.get(Calendar.YEAR)
-        val doy = now.get(Calendar.DAY_OF_YEAR)
-        val max = now.getActualMaximum(Calendar.DAY_OF_YEAR)
-        val d = resources.displayMetrics.density
-        t.color = Color.WHITE
-        t.textSize = 16 * d
-        t.textAlign = Paint.Align.LEFT
-        cv.drawText("$yr", 16 * d, 30 * d, t)
-        t.textSize = 12 * d
-        t.color = 0xB3FFFFFF.toInt()
-        t.textAlign = Paint.Align.RIGHT
-        cv.drawText("${doy * 100 / max}% \u00B7 ${max - doy} days left", width - 16 * d, 30 * d, t)
-        val left = 16 * d
-        val top = 46 * d
-        val cw = (width - 32 * d) / 31f
-        val rh = (height - top - 14 * d) / 12f
-        val r = minOf(cw, rh) * .28f
-        var n = 0
-        for (m in 0 until 12) {
-            val dim = Calendar.getInstance().apply { clear(); set(yr, m, 1) }
-                .getActualMaximum(Calendar.DAY_OF_MONTH)
-            for (day in 0 until dim) {
-                n++
-                p.color = when {
-                    n < doy -> Color.WHITE
-                    n == doy -> accent
-                    else -> 0x4DFFFFFF
-                }
-                cv.drawCircle(left + cw * (day + .5f), top + rh * (m + .5f), r, p)
-            }
-        }
+// Day-name text: letter spacing adds a gap after the last letter too, so shift
+// the text by half of it to keep the word truly centered.
+class DayText(c: Context) : TextView(c) {
+    override fun onDraw(canvas: Canvas) {
+        val shift = letterSpacing * textSize / 2f
+        canvas.save()
+        canvas.translate(shift, 0f)
+        super.onDraw(canvas)
+        canvas.restore()
     }
 }

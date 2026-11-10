@@ -44,6 +44,10 @@ class Prefs(c: Context) {
         get() = sp.getString("note", "") ?: ""
         set(v) { sp.edit().putString("note", v).apply() }
 
+    var pages: String
+        get() = sp.getString("pages", "0") ?: "0"
+        set(v) { sp.edit().putString("pages", v).apply() }
+
     var home: String?
         get() = sp.getString("home", null)
         set(v) { sp.edit().putString("home", v).apply() }
