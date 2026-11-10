@@ -63,6 +63,7 @@ import android.widget.SeekBar
 import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -214,6 +215,7 @@ class MainActivity : Activity() {
         "admin" to "Admin panel (choose which apps show)",
         "hide" to "Show hidden apps",
         "customize" to "Customize (size, columns, colors)",
+        "setup" to "Setup status bar, panels and permissions",
         "help" to "List of all commands"
     )
 
@@ -310,6 +312,11 @@ class MainActivity : Activity() {
 
     override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
+        if (intent?.getBooleanExtra("open_timer", false) == true) {
+            if (open) snapClosed()
+            handler.postDelayed({ showTimerDialog() }, 250)
+            return
+        }
         if (open) setDrawer(false) else if (pager.currentItem != 0) pager.setCurrentItem(0, true)
     }
 
@@ -334,7 +341,7 @@ class MainActivity : Activity() {
         (rv.layoutManager as GridLayoutManager).spanCount = prefs.cols
         appAdapter.notifyDataSetChanged()
         timerTv.background = glass(22, accentTint())
-        cellHi.background = glass(16, accentTint())
+        cellHi.background = glass(14, 0x55B0B0B0)
         window.setBackgroundDrawable(ColorDrawable(if (prefs.blackBg) Color.BLACK else Color.TRANSPARENT))
         normalizePlacements()
         renderHome()
@@ -1000,6 +1007,7 @@ class MainActivity : Activity() {
             "admin" -> { search.setText(""); hideKeyboard(); showAdmin() }
             "customize" -> { search.setText(""); hideKeyboard(); showCustomize() }
             "help" -> { search.setText(""); hideKeyboard(); showHelp() }
+            "setup" -> { search.setText(""); hideKeyboard(); showSetup() }
             "hide" -> {
                 hiddenMode = true
                 search.setText("")
@@ -1013,14 +1021,70 @@ class MainActivity : Activity() {
 
     private fun darkDialog() = AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
 
+    private fun showSetup() {
+        val col = LinearLayout(this)
+        col.orientation = LinearLayout.VERTICAL
+        col.setPadding(dp(22), dp(8), dp(22), dp(8))
+        val d = darkDialog().setTitle("Setup").setView(col).setPositiveButton("Done", null).create()
+
+        fun row(title: String, why: String, done: Boolean, act: () -> Unit) {
+            val t = TextView(this)
+            t.text = (if (done) "\u2713  " else "")+ title
+            t.setTextColor(if (done) 0xFF34C759.toInt() else Color.WHITE)
+            t.textSize = 15f
+            t.setPadding(0, dp(12), 0, 0)
+            col.addView(t)
+            val w = TextView(this)
+            w.text = why
+            w.setTextColor(0xAAFFFFFF.toInt())
+            w.textSize = 12f
+            col.addView(w)
+            val b = Button(this)
+            b.text = if (done) "Open settings" else "Turn on"
+            b.setOnClickListener { try { act() } catch (e: Exception) { } ; d.dismiss() }
+            col.addView(b, LinearLayout.LayoutParams(WC, WC))
+        }
+
+        row("1. Accessibility service",
+            "Custom status bar, swipe-down panels and the close glow.",
+            StatusBarService.instance != null) {
+            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        }
+        row("2. Notification access",
+            "Shows notifications in the left panel and the song name in the control center.",
+            NotificationManagerCompat.getEnabledListenerPackages(this).contains(packageName)) {
+            startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+        }
+        row("3. Modify system settings",
+            "Brightness slider and rotation lock.",
+            Settings.System.canWrite(this)) {
+            startActivity(Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, Uri.parse("package:$packageName")))
+        }
+        row("4. Phone state",
+            "Signal bars and the VoLTE tag.",
+            checkSelfPermission(Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.READ_PHONE_STATE), 8)
+        }
+        val note = TextView(this)
+        note.text = "If Android says \"Restricted setting\": open App info for Classic Launcher, tap the 3-dot menu, choose \"Allow restricted settings\", then try again."
+        note.setTextColor(0x99FFFFFF.toInt())
+        note.textSize = 11f
+        note.setPadding(0, dp(14), 0, 0)
+        col.addView(note)
+        d.show()
+    }
+
     private fun showHelp() {
         val msg = "SEARCH COMMANDS (type, then press Enter)\n\n" +
             "admin  -  choose which apps show or hide\n" +
             "hide  -  open the list of hidden apps\n" +
             "customize  -  icon size, columns, colors\n" +
+            "setup  -  turn on status bar, panels, permissions\n" +
             "help  -  this list\n\n" +
             "GESTURES\n\n" +
             "Swipe up  -  app drawer\n" +
+            "Swipe down from top-left  -  notification center\n" +
+            "Swipe down from top-right  -  control center\n" +
             "Swipe left / right  -  home pages\n" +
             "Hold an app, then drag  -  place it on home or in the dock\n" +
             "Drop an app on another app  -  make a folder\n" +
@@ -1391,10 +1455,16 @@ class MainActivity : Activity() {
                         if (m.itemId == 1) {
                             val fp = placements.firstOrNull { it.kind == 1 && it.ref == f.id }
                             if (fp != null) {
-                                val cell = findFree(fp.page, fp.col, fp.row, fp)
+                                val pg = fp.page
+                                val c0 = fp.col
+                                val r0 = fp.row
                                 f.keys.remove(key)
+                                // 1 app left -> folder turns into a normal icon, 0 left -> folder removed
                                 cleanFolder(f)
-                                placements.add(Placement(fp.page, cell[0], cell[1], 0, key))
+                                // the old cell is still taken (by the folder or the last app),
+                                // so the app that came out goes to the nearest FREE cell
+                                val cell = findFree(pg, c0, r0, null)
+                                placements.add(Placement(pg, cell[0], cell[1], 0, key))
                                 saveHome(); renderHome()
                             }
                             d.dismiss()
@@ -1464,7 +1534,18 @@ class MainActivity : Activity() {
         val c = MotionEvent.obtain(now, now, MotionEvent.ACTION_CANCEL, lastRawX, lastRawY, 0)
         window.superDispatchTouchEvent(c)
         c.recycle()
-        removeBar.visibility = if (src == SRC_HOME || src == SRC_DOCK) View.VISIBLE else View.GONE
+        val removable = src == SRC_HOME || src == SRC_DOCK
+        removeBar.animate().cancel()
+        if (removable) {
+            shrinkHome(true)
+            removeBar.translationY = -dp(70).toFloat()
+            removeBar.alpha = 0f
+            removeBar.visibility = View.VISIBLE
+            removeBar.animate().translationY(0f).alpha(1f).setDuration(240)
+                .setInterpolator(DecelerateInterpolator(1.8f)).start()
+        } else {
+            removeBar.visibility = View.GONE
+        }
         removeBar.setBackgroundColor(0x66000000)
         boostFps(true)
     }
@@ -1487,14 +1568,49 @@ class MainActivity : Activity() {
         if (layer.width == 0) return null
         val loc = IntArray(2)
         layer.getLocationOnScreen(loc)
-        val lx = x - loc[0]
-        val ly = y - loc[1]
+        val sc = if (homeLayer.scaleX > 0.01f) homeLayer.scaleX else 1f
+        val lx = (x - loc[0]) / sc
+        val ly = (y - loc[1]) / sc
         if (lx < 0 || ly < 0 || lx >= layer.width || ly >= layer.height) return null
         val cols = prefs.cols
         val cw = layer.width / cols
         val ch = cellH()
         val rows = rowsOf(layer)
         return intArrayOf(pid, (lx / cw).toInt().coerceIn(0, cols - 1), (ly / ch).toInt().coerceIn(0, rows - 1))
+    }
+
+    private var hiCell: IntArray? = null
+    private var hiTx = 0f
+    private var hiTy = 0f
+    private var shrunk = false
+
+    private fun hideCellHi() {
+        hiCell = null
+        if (cellHi.visibility == View.VISIBLE) {
+            cellHi.animate().alpha(0f).scaleX(0.85f).scaleY(0.85f).setDuration(110)
+                .withEndAction { if (hiCell == null) cellHi.visibility = View.GONE }.start()
+        }
+    }
+
+    // While an icon from home/dock is being dragged, the whole home screen shrinks toward
+    // the bottom, which frees a clear strip at the top for the Remove bar.
+    private fun shrinkHome(on: Boolean) {
+        if (shrunk == on) return
+        shrunk = on
+        homeLayer.animate().cancel()
+        homeLayer.pivotX = root.width / 2f
+        homeLayer.pivotY = root.height.toFloat()
+        val t = if (on) 0.86f else 1f
+        homeLayer.animate().scaleX(t).scaleY(t).setDuration(if (on) 240L else 200L)
+            .setInterpolator(DecelerateInterpolator(1.8f))
+            .withEndAction {
+                if (on) {
+                    if (drag != null && dragMoved) updateDragTargets(lastRawX, lastRawY)
+                } else {
+                    homeLayer.pivotX = root.width / 2f
+                    homeLayer.pivotY = root.height / 2f
+                }
+            }.start()
     }
 
     private fun updateDragTargets(x: Float, y: Float) {
@@ -1504,23 +1620,46 @@ class MainActivity : Activity() {
 
         val cell = if (!inRemove && !inDockZone(y)) cellAt(x, y) else null
         if (cell == null) {
-            cellHi.visibility = View.GONE
+            hideCellHi()
         } else {
             val layer = layers[cell[0]]
-            if (layer == null) { cellHi.visibility = View.GONE; return }
+            if (layer == null) { hideCellHi(); return }
             val loc = IntArray(2)
             layer.getLocationOnScreen(loc)
-            val cw = layer.width / prefs.cols
-            val ch = cellH()
+            val sc = if (homeLayer.scaleX > 0.01f) homeLayer.scaleX else 1f
+            val cw = (layer.width / prefs.cols).toFloat()
+            val ch = cellH().toFloat()
+            val ip = dp(prefs.iconDp).toFloat()
+            // small rounded grey box, a bit smaller than the icon, centred on the slot
+            val boxPx = (ip * 0.9f * sc).toInt()
+            val cx = loc[0] + (cell[1] * cw + cw / 2f) * sc
+            val cy = loc[1] + (cell[2] * ch + dp(4) + ip / 2f) * sc
+            val tx = cx - boxPx / 2f
+            val ty = cy - boxPx / 2f
             val lp = cellHi.layoutParams
-            if (lp.width != cw || lp.height != ch) {
-                lp.width = cw
-                lp.height = ch
+            if (lp.width != boxPx || lp.height != boxPx) {
+                lp.width = boxPx
+                lp.height = boxPx
                 cellHi.layoutParams = lp
             }
-            cellHi.translationX = (loc[0] + cell[1] * cw).toFloat()
-            cellHi.translationY = (loc[1] + cell[2] * ch).toFloat()
-            cellHi.visibility = View.VISIBLE
+            val moved = abs(tx - hiTx) > 0.5f || abs(ty - hiTy) > 0.5f
+            if (cellHi.visibility != View.VISIBLE) {
+                cellHi.animate().cancel()
+                cellHi.translationX = tx
+                cellHi.translationY = ty
+                cellHi.alpha = 0f
+                cellHi.scaleX = 0.8f
+                cellHi.scaleY = 0.8f
+                cellHi.visibility = View.VISIBLE
+                cellHi.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(170)
+                    .setInterpolator(DecelerateInterpolator(1.6f)).start()
+            } else if (moved) {
+                cellHi.animate().translationX(tx).translationY(ty).alpha(1f).scaleX(1f).scaleY(1f)
+                    .setDuration(150).setInterpolator(DecelerateInterpolator(1.6f)).start()
+            }
+            hiCell = cell
+            hiTx = tx
+            hiTy = ty
         }
 
         // hold at the screen edge to flip pages while dragging
@@ -1563,8 +1702,13 @@ class MainActivity : Activity() {
         drag = null
         handler.removeCallbacks(edgeRun)
         edgeDir = 0
+        cellHi.animate().cancel()
         cellHi.visibility = View.GONE
-        removeBar.visibility = View.GONE
+        hiCell = null
+        shrinkHome(false)
+        removeBar.animate().cancel()
+        removeBar.animate().translationY(-dp(70).toFloat()).alpha(0f).setDuration(180)
+            .withEndAction { if (drag == null) removeBar.visibility = View.GONE }.start()
         boostFps(false)
         d.srcView?.alpha = 1f
         d.ghost.animate().alpha(0f).scaleX(0.7f).scaleY(0.7f).setDuration(150)

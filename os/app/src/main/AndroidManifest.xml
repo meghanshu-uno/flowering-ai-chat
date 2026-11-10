@@ -4,10 +4,14 @@
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.WRITE_SETTINGS" />
 
     <application
         android:allowBackup="false"
-        android:label="Axolot Launcher"
+        android:label="Classic Launcher"
         android:theme="@style/AppTheme">
 
         <activity
@@ -30,5 +34,30 @@
         <receiver
             android:name=".TimerReceiver"
             android:exported="false" />
+
+        <!-- custom status bar + swipe-down panels + close glow -->
+        <service
+            android:name=".StatusBarService"
+            android:exported="false"
+            android:label="Classic Status Bar"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_config" />
+        </service>
+
+        <!-- lets the notification center read notifications -->
+        <service
+            android:name=".NotifService"
+            android:exported="true"
+            android:label="Classic Notifications"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
     </application>
 </manifest>

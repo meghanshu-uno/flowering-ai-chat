@@ -1,0 +1,3 @@
+<resources>
+    <string name="a11y_desc">Draws the Classic Launcher status bar and swipe-down panels over the system status bar, and plays the glow when an app is closed. It does not read any screen content.</string>
+</resources>
